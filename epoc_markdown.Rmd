@@ -1,0 +1,90 @@
+---
+title: "EPOC"
+author: "Estefany Elizarraraz"
+date: "2023-12-06"
+output: word_document
+---
+
+
+```{r echo=FALSE}
+library(tidyverse)
+library(Hmisc)
+library(mfx)
+library(MASS)
+library(caret)
+data<-read_csv("C:/Users/delia/Documents/LE701/Econometría de la salud/nhis_00007.csv")
+
+#describe(data)
+
+data %>%
+  mutate(URBRRL = ifelse(URBRRL==1 | URBRRL==2 | URBRRL==3, 1, 0)) -> data
+
+data$AGE[data$AGE>100 | data$AGE<17] <-NA 
+
+data$SEX[data$SEX==7 | data$SEX==8 | data$SEX==9]  <- NA #se concervan solo Male (1) y Female (2)
+
+data$USUALPL[data$USUALPL==7 | data$USUALPL==9 | data$USUALPL==8]  <- NA   #No tiene o no hay registro de un lugar de registro medico
+data$USUALPL[data$USUALPL==2 |data$USUALPL==3] <- 2   #Tiene un lugar de cuidado medico (1 es los que no tienen)
+
+data$COPDEV[data$COPDEV==0 | data$COPDEV==7| data$COPDEV==9] <- NA #no hay registro de EPOC. (1=no y 2=si)
+
+data$SMOKEV[data$SMOKEV==0 | data$SMOKEV==7 | data$SMOKEV==8 | data$SMOKEV==9] <- NA #no hay registro a si ha fumado 100 cigarrillo en su vida
+
+data$SMOKESTATUS2[data$SMOKESTATUS2==0 | data$SMOKESTATUS2==90 | data$SMOKESTATUS2==40 ] <-NA  #no hay datos disponibles
+data$SMOKESTATUS2[data$SMOKESTATUS2==11 ] <- 1  #fuma diario
+data$SMOKESTATUS2[data$SMOKESTATUS2==12 ] <- 2  #fumma a veces
+data$SMOKESTATUS2[data$SMOKESTATUS2==20 ] <- 3  #antes fumaba 
+data$SMOKESTATUS2[data$SMOKESTATUS2==30 ] <- 0  #nunca ha fumado
+
+data$ECIGEV[data$ECIGEV==0 | data$ECIGEV==7 | data$ECIGEV==8 | data$ECIGEV==9]  <- NA  #NO HAY RESPUESTA A SI HA FUMADO UN CIGARRILLO ELECTRONICO
+
+data$ECIGSTATUS[data$ECIGSTATUS==0 | data$ECIGSTATUS==4 | data$ECIGSTATUS==9 ] <-NA  #no hay datos disponibles (1= nunca ha fumado un e-cigarrillo;3=fumma a veces; 2=antes fumaba )
+
+data$CIGAREV[data$CIGAREV==0 | data$CIGAREV==7 | data$CIGAREV==8 |data$CIGAREV==9] <- NA #no hay registro de si ha fumado un cigarrillo (1=no, 2=si)
+
+data$PIPEV[data$PIPEV==0 | data$PIPEV==7 | data$PIPEV==8 | data$PIPEV==9] <- NA #no hay registro de si ha fumado con pipa (1=no, 2=si)
+
+data$SMKLSEV[data$SMKLSEV==0 | data$SMKLSEV==7 | data$SMKLSEV==8 | data$SMKLSEV==9] <- NA  #no hay registro de si ha fumado cigarrillos sin tabaco  (1=no, 2=si)
+
+#describe(data) 
+#plot(describe(data) )
+
+#variables dummy
+data %>% 
+  mutate(female = ifelse(SEX== 2 , 1, 0),
+         usualpl = ifelse(USUALPL=="2", 1, 0),
+         EPOC= ifelse(COPDEV=="2", 1, 0),
+         smokecig100 = ifelse(SMOKEV=="2", 1, 0),
+         ecigev= ifelse(ECIGEV=="2", 1, 0),
+         cigarev= ifelse(CIGAREV=="2", 1, 0),
+         pipev= ifelse(PIPEV=="2", 1, 0),
+         smklsev= ifelse(SMKLSEV=="2", 1, 0)
+  )-> data_final
+#describe(data_final)
+
+
+mlogit_cig_ecig_smk100_smk <- glm(EPOC ~ AGE + female + URBRRL + cigarev+ecigev+smokecig100+smklsev, 
+                                  data = data_final,
+                                  family = binomial(link = "logit"))
+
+summary(mlogit_cig_ecig_smk100_smk)
+
+means <- data.frame(cigarev=1,female=1, URBRRL=1, ecigev=1, AGE = 52.3, smokecig100=1,smklsev=1, pipev=1)
+healthy <- data.frame(cigarev=0, female=0, URBRRL=0, ecigev=0, AGE = 52.3, smokecig100=0,smklsev=0)
+
+predict(mlogit_cig_ecig_smk100_smk, newdata=means, type="response", se.fit=TRUE)
+predict(mlogit_cig_ecig_smk100_smk, newdata=healthy, type="response", se.fit=TRUE)
+
+logitmfx(formula=EPOC ~ AGE + female + URBRRL + cigarev+ecigev+smokecig100+smklsev, data = data_final)
+logit.odds <- cbind(Coeficiente=round(coef(mlogit_cig_ecig_smk100_smk),4), OR=round(exp(coef(mlogit_cig_ecig_smk100_smk)),4))
+print(logit.odds)
+
+logit.probs2 <- predict(mlogit_cig_ecig_smk100_smk, newdata=data_final, type="response")
+
+LOGIT.y2 <- as.factor(as.numeric(logit.probs2>0.5))
+LOGIT.ref2 <- as.factor(data_final$EPOC)
+logit.cmtx2 <- confusionMatrix(data = LOGIT.y2, reference = LOGIT.ref2)
+print(logit.cmtx2)
+```
+
+
